@@ -1,31 +1,30 @@
-
-# coding: utf-8
-
-# # Final Project
-# 
-# Create a Dashboard taking data from [Eurostat, GDP and main components (output, expenditure and income)](http://ec.europa.eu/eurostat/web/products-datasets/-/nama_10_gdp). 
-# The dashboard will have two graphs: 
-
-# * The first one will be a scatterplot with two DropDown boxes for the different indicators. It will have also a slide for the different years in the data. 
-
-# In[1]:
-
-
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
+
 import pandas as pd
 
+# read values
+dfo = pd.read_csv('nama_10_gdp_1_Data.csv', engine = 'python')
+dfo.columns = ['Time', 'Geo', 'Unit', 'NA_item', 'Value', 'Flag_and_footnotes']
+
+# clean data
+# clear the lines with 'Euro', which are not european countries and set the measure to be Current prices, million euro
+dfn = dfo[~dfo['Geo'].str.contains('Euro')]
+df = dfn[dfn['Unit'].str.contains('Current prices, million euro')]
+
+# get the indicators
+available_indicators_n = df['NA_item'].unique()
+# get the indicators
+available_indicators_g = df['Geo'].unique()
+
+# first paragraph
+# design layout
 app = dash.Dash(__name__)
 server = app.server
+app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
 
-df = pd.read_csv(
-    'nama_10_gdp_1_Data.csv')
-
-df=df[~df.GEO.str.contains("Euro")]
-
-available_indicators = df['NA_ITEM'].unique()
 
 app.layout = html.Div([
     html.Div([
@@ -33,14 +32,12 @@ app.layout = html.Div([
         html.Div([
             dcc.Dropdown(
                 id='xaxis-column',
-                options=[{'label': i, 'value': i} for i in available_indicators],
+                options=[{'label': i, 'value': i} for i in available_indicators_n],
                 value='Gross domestic product at market prices'
             ),
             dcc.RadioItems(
                 id='xaxis-type',
-                options=[{'label': i, 'value': i} for i in ['Linear', 'Log']],
                 value='Linear',
-                labelStyle={'display': 'inline-block'}
             )
         ],
         style={'width': '48%', 'display': 'inline-block'}),
@@ -48,32 +45,58 @@ app.layout = html.Div([
         html.Div([
             dcc.Dropdown(
                 id='yaxis-column',
-                options=[{'label': i, 'value': i} for i in available_indicators],
-                value='Final consumption expenditure'
+                options=[{'label': i, 'value': i} for i in available_indicators_n],
+                value='Gross domestic product at market prices'
             ),
             dcc.RadioItems(
                 id='yaxis-type',
-                options=[{'label': i, 'value': i} for i in ['Linear', 'Log']],
                 value='Linear',
-                labelStyle={'display': 'inline-block'}
             )
         ],style={'width': '48%', 'float': 'right', 'display': 'inline-block'})
     ]),
 
-    dcc.Graph(id='indicator-graphic'),
+    dcc.Graph(id='indicator-graphic'), # graph component
 
-    dcc.Slider(
+    dcc.Slider( # slider component
         id='year--slider',
-        min=df['TIME'].min(),
-        max=df['TIME'].max(),
-        value=df['TIME'].max(),
+        min=df['Time'].min(),
+        max=df['Time'].max(),
+        value=df['Time'].max(),
         step=None,
-        marks={str(year): str(year) for year in df['TIME'].unique()}
-    )
+        marks={str(year): str(year) for year in df['Time'].unique()}
+    ),
+    
+    html.Div([
+        
+        html.Div([
+            dcc.Dropdown(
+                id='Countries',
+                options=[{'label': i, 'value': i} for i in available_indicators_g],
+                value='France'
+            ),
+            
+            dcc.RadioItems(id='Countries-type')
+        
+        ],
+        style={'width': '48%', 'display': 'inline-block'}),
+
+        html.Div([
+            dcc.Dropdown(
+                id='Indicators',
+                options=[{'label': i, 'value': i} for i in available_indicators_n],
+                value='Gross domestic product at market prices'
+            ),
+            
+            dcc.RadioItems(id='Indicators-type')
+        ],
+        style={'width': '48%', 'float': 'right', 'display': 'inline-block'})
+    ]),
+
+    dcc.Graph(id='Graphic') # graph component
 ])
 
-@app.callback(
-    dash.dependencies.Output('indicator-graphic', 'figure'),
+@app.callback( #call back function to update
+    dash.dependencies.Output('indicator-graphic', 'figure'), #diff output, diff callbacks
     [dash.dependencies.Input('xaxis-column', 'value'),
      dash.dependencies.Input('yaxis-column', 'value'),
      dash.dependencies.Input('xaxis-type', 'value'),
@@ -82,164 +105,68 @@ app.layout = html.Div([
 def update_graph(xaxis_column_name, yaxis_column_name,
                  xaxis_type, yaxis_type,
                  year_value):
-    dff = df[df['TIME'] == year_value]
+    dff = df[df['Time'] == year_value] # filter the data for the year
     
-    return {
+    return {  #still in call back function
         'data': [go.Scatter(
-            x=dff[dff['NA_ITEM'] == xaxis_column_name]['Value'],
-            y=dff[dff['NA_ITEM'] == yaxis_column_name]['Value'],
-            text=dff[dff['NA_ITEM'] == yaxis_column_name]['GEO'],
+            x=dff[dff['NA_item'] == xaxis_column_name]['Value'],
+            y=dff[dff['NA_item'] == yaxis_column_name]['Value'],
+            text=dff[dff['NA_item'] == yaxis_column_name]['Geo'],
             mode='markers',
             marker={
                 'size': 15,
                 'opacity': 0.5,
+                'color' : ('rgb(10, 186, 181)'),
                 'line': {'width': 0.5, 'color': 'white'}
             }
         )],
         'layout': go.Layout(
             xaxis={
                 'title': xaxis_column_name,
-                'type': 'linear' if xaxis_type == 'Linear' else 'log'
+                'type': 'linear'
             },
             yaxis={
                 'title': yaxis_column_name,
-                'type': 'linear' if yaxis_type == 'Linear' else 'log'
+                'type': 'linear'
             },
             margin={'l': 40, 'b': 40, 't': 10, 'r': 0},
             hovermode='closest'
         )
     }
-
-if __name__ == '__main__':
-    app.run_server()
-
-
-# * The other graph will be a line chart with two DropDown boxes, one for the country and the other for selecting one of the indicators. (hint use Scatter object using mode = 'lines' [(more here)](https://plot.ly/python/line-charts/) 
-
-# In[2]:
-
-
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
-import plotly.graph_objs as go
-import pandas as pd
-
-app = dash.Dash(__name__)
-server = app.server
-
-df = pd.read_csv(
-    'nama_10_gdp_1_Data.csv')
-
-df=df[~df.GEO.str.contains("Euro")]
-
-available_indicators = df['NA_ITEM'].unique()
-available_indicators = df['GEO'].unique()
-
-app.layout = html.Div([
-    html.Div([
-
-        html.Div([
-            dcc.Dropdown(
-                id='xaxis-column',
-                options=[{'label': i, 'value': i} for i in available_indicators],
-                value='Belgium'
-            ),
-            dcc.RadioItems(
-                id='xaxis-type',
-                options=[{'label': i, 'value': i} for i in ['Linear', 'Log']],
-                value='Linear',
-                labelStyle={'display': 'inline-block'}
-            )
-        ],
-        style={'width': '48%', 'display': 'inline-block'}),
-
-        
-        html.Div([
-            dcc.Dropdown(
-                id='yaxis-column',
-                options=[{'label': i, 'value': i} for i in 'available_indicators'],
-                value='Final consumption expenditure'
-            ),
-            dcc.RadioItems(
-                id='yaxis-type',
-                options=[{'label': i, 'value': i} for i in ['Linear', 'Log']],
-                value='Linear',
-                labelStyle={'display': 'inline-block'}
-            )
-        ],style={'width': '48%', 'float': 'right', 'display': 'inline-block'})
-    ]),
-
-    dcc.Graph(id='indicator-graphic'),
-
-])
 
 @app.callback(
-    dash.dependencies.Output('indicator-graphic', 'figure'),
-    [dash.dependencies.Input('xaxis-column', 'value'),
-     dash.dependencies.Input('yaxis-column', 'value'),
-     dash.dependencies.Input('xaxis-type', 'value'),
-     dash.dependencies.Input('yaxis-type', 'value')])
+    dash.dependencies.Output('Graphic', 'figure'),
+    [dash.dependencies.Input('Countries', 'value'),
+     dash.dependencies.Input('Indicators', 'value'),
+     dash.dependencies.Input('Countries-type', 'value'),
+     dash.dependencies.Input('Indicators-type', 'value')])
 def update_graph(xaxis_column_name, yaxis_column_name,
                  xaxis_type, yaxis_type):
+
     
-    
-    return {
+    return {  #still in call back function
         'data': [go.Scatter(
-            x=df[df['GEO'] == xaxis_column_name]['Value'],
-            y=df[df['NA_ITEM'] == yaxis_column_name]['Value'],
-            text=df[df['NA_ITEM'] == yaxis_column_name]['GEO'],
+            x=df['Time'].unique(),
+            y=df[(df['Geo'] == xaxis_column_name) & (df['NA_item'] == yaxis_column_name)]['Value'],
+            text=xaxis_column_name,
             mode='lines',
-            marker={
-                'size': 15,
-                'opacity': 0.5,
-                'line': {'width': 0.5, 'color': 'white'}
+            line = {
+                'color' : ('rgb(10, 186, 181)'),
+                'shape':'spline'
             }
         )],
         'layout': go.Layout(
             xaxis={
                 'title': xaxis_column_name,
-                'type': 'linear' if xaxis_type == 'Linear' else 'log'
             },
             yaxis={
                 'title': yaxis_column_name,
-                'type': 'linear' if yaxis_type == 'Linear' else 'log'
             },
-            margin={'l': 40, 'b': 40, 't': 10, 'r': 0},
+            margin={'l': 60, 'b': 40, 't': 10, 'r': 0},
             hovermode='closest'
+            
         )
     }
 
 if __name__ == '__main__':
     app.run_server()
-
-
-# In[6]:
-
-
-dcc.Graph(id='indicator-graphic'),
-
-dcc.Slider(
-    id='year--slider',
-    min=df['TIME'].min(),
-    max=df['TIME'].max(),
-    value=df['TIME'].max(),
-    step=None,
-    marks={str(year): str(year) for year in df['TIME'].unique()}
-)
-])
-
-
-# In[ ]:
-
-
-
-    dcc.Slider(
-        id='year--slider',
-        min=df['TIME'].min(),
-        max=df['TIME'].max(),
-        value=df['TIME'].max(),
-        step=None,
-        marks={str(year): str(year) for year in df['TIME'].unique()}
-    )
-
